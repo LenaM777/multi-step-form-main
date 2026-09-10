@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { api } from './services/api';
 import type { FormOptions, MultiStepFormData } from './types/form';
+import { PersonalInfoStep } from './components/PersonalInfoStep/PersonalInfoStep';
+import { PlanStep } from './components/PlanStep/PlanStep';
+import { AddOnsStep } from './components/AddOnsStep/AddOnsStep';
+import { SummaryStep } from './components/SummaryStep/SummaryStep';
 
 export function App() {
   const [options, setOptions] = useState<FormOptions | null>(null);
@@ -8,6 +12,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+
   const [formData, setFormData] = useState<MultiStepFormData>({
     personalInfo: { name: '', email: '', phone: '' },
     plan: { id: 'arcade', title: 'Arcade', billingCycle: 'monthly', price: 9 },
@@ -20,8 +26,8 @@ export function App() {
         const data = await api.getOptions();
         setOptions(data);
       } catch (err) {
-        console.error('Помилка завантаження даних:', err);
-        setError('Не вдалося завантажити дані з сервера');
+        console.error('Error loading data:', err);
+        setError('Failed to load data from server');
       } finally {
         setLoading(false);
       }
@@ -30,7 +36,6 @@ export function App() {
     fetchOptions();
   }, []);
 
-  // Допоміжна функція оновлення даних форми та переходу на наступний крок
   const handleUpdateFormData = <K extends keyof MultiStepFormData>(
     key: K,
     value: MultiStepFormData[K],
@@ -42,29 +47,62 @@ export function App() {
     }
   };
 
-  if (loading) return <div>Завантаження даних з сервера...</div>;
-  if (error) return <div>Помилка: {error}</div>;
+  // Фінальна відправка даних на Express-сервер
+  const handleFinalSubmit = async () => {
+    await api.submitSubscription(formData);
+    setIsSubmitted(true);
+  };
+
+  if (loading) return <div>Loading data from server...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>Multi-Step Form</h1>
-      <p>Поточний крок: {currentStep} з 4</p>
+    <div style={{ maxWidth: '600px', margin: '40px auto', fontFamily: 'sans-serif', border: '1px solid #ccc', padding: '20px', borderRadius: '8px' }}>
+      {!isSubmitted && <p>Step {currentStep} of 4</p>}
 
-      {/* Тимчасова кнопка перевірки перемикання кроків */}
-      <button 
-        type="button" 
-        onClick={() => setCurrentStep((prev) => (prev < 4 ? prev + 1 : 1))}
-      >
-        Тест: Наступний крок
-      </button>
+      {isSubmitted ? (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <h2>Thank you!</h2>
+          <p>Thanks for confirming your subscription! We hope you have fun using our platform.</p>
+        </div>
+      ) : (
+        <>
+          {currentStep === 1 && (
+            <PersonalInfoStep
+              defaultValues={formData.personalInfo}
+              onNext={(data) => handleUpdateFormData('personalInfo', data, 2)}
+            />
+          )}
 
-      <pre style={{ background: '#f4f4f4', padding: '10px', marginTop: '15px' }}>
-        {JSON.stringify({ 
-          formData, 
-          availablePlansCount: options?.plans.monthly.length,
-          handleUpdateFormData: typeof handleUpdateFormData 
-        }, null, 2)}
-      </pre>
+          {currentStep === 2 && options && (
+            <PlanStep
+              options={options.plans}
+              defaultValues={formData.plan}
+              onNext={(data) => handleUpdateFormData('plan', data, 3)}
+              onBack={() => setCurrentStep(1)}
+            />
+          )}
+
+          {currentStep === 3 && options && (
+            <AddOnsStep
+              options={options.addOns[formData.plan.billingCycle]}
+              defaultValues={formData.addOns}
+              billingCycle={formData.plan.billingCycle}
+              onNext={(data) => handleUpdateFormData('addOns', data, 4)}
+              onBack={() => setCurrentStep(2)}
+            />
+          )}
+
+          {currentStep === 4 && (
+            <SummaryStep
+              formData={formData}
+              onConfirm={handleFinalSubmit}
+              onBack={() => setCurrentStep(3)}
+              onChangePlan={() => setCurrentStep(2)}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
