@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const subscriptionSchema = z.object({
+export const createSubscriptionSchema = z.object({
   personalInfo: z.object({
     name: z.string().min(1, "This field is required"),
     email: z.string().email("Invalid email"),
@@ -19,3 +19,5 @@ export const subscriptionSchema = z.object({
     })
   )
 });
+
+export type CreateSubscriptionInput = z.infer<typeof createSubscriptionSchema>;
